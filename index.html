@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>AI 3D Generator 7MODY — محرك النماذج الذكي حمودي</title>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Space+Mono:wght@400;700&family=Noto+Kufi+Arabic:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#030B18;--panel:rgba(4,14,32,0.97);
+  --blue:#38bdf8;--violet:#a78bfa;--amber:#fbbf24;--green:#34d399;--red:#f87171;
+  --text:#94a3b8;--texthi:#e2e8f0;--dim:#334155;
+  --border:rgba(56,189,248,0.1);--borderact:rgba(56,189,248,0.35);
+  --glow:rgba(56,189,248,0.15);
+}
+html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);
+  font-family:'Noto Kufi Arabic','Rajdhani',sans-serif;color:var(--text)}
+
+#canvas{position:fixed;top:0;left:0;width:100%;height:100%;display:block;cursor:grab}
+#canvas:active{cursor:grabbing}
+
+/* === PANEL === */
+#panel{
+  position:fixed;top:0;left:0;width:330px;height:100vh;
+  background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;z-index:10;overflow:hidden;
+  backdrop-filter:blur(20px);
+}
+#panel::before{
+  content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(56,189,248,.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(56,189,248,.025) 1px,transparent 1px);
+  background-size:28px 28px;
+}
+.panel-header,.panel-body{position:relative;z-index:1}
+
+.panel-header{
+  padding:18px 18px 14px;border-bottom:1px solid var(--border);
+  background:linear-gradient(180deg,rgba(56,189,248,.07) 0%,transparent 100%);
+  flex-shrink:0;
+}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{
+  width:38px;height:38px;border-radius:9px;flex-shrink:0;
+  background:linear-gradient(135deg,var(--blue),var(--violet));
+  display:flex;align-items:center;justify-content:center;font-size:18px;
+  box-shadow:0 4px 20px rgba(56,189,248,.3);
+}
+.logo-title{font-family:'Rajdhani',sans-serif;font-size:19px;font-weight:700;color:#fff;letter-spacing:.5px}
+.logo-sub{font-family:'Space Mono',monospace;font-size:9px;color:var(--blue);opacity:.6;letter-spacing:2px;margin-top:1px}
+
+.panel-body{flex:1;overflow-y:auto;padding:14px}
+.panel-body::-webkit-scrollbar{width:3px}
+.panel-body::-webkit-scrollbar-thumb{background:var(--borderact);border-radius:2px}
+
+/* Upload */
+#upload-zone{
+  border:2px dashed var(--border);border-radius:12px;padding:28px 16px;
+  text-align:center;cursor:pointer;transition:all .3s;position:relative;
+  overflow:hidden;margin-bottom:14px;
+}
+#upload-zone:hover,#upload-zone.over{border-color:var(--blue);background:var(--glow)}
+#upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.up-icon{font-size:34px;display:block;margin-bottom:8px}
+.up-title{font-size:14px;font-weight:700;color:var(--texthi);margin-bottom:3px}
+.up-sub{font-size:11px;color:var(--dim)}
+
+/* Preview */
+#img-prev{display:none;margin-bottom:14px;border-radius:10px;overflow:hidden;position:relative;background:#000;border:1px solid var(--border)}
+#img-prev img{width:100%;max-height:150px;object-fit:cover;display:block;opacity:.9}
+.prev-overlay{position:absolute;inset:0;background:linear-gradient(0deg,rgba(3,11,24,.85) 0%,transparent 55%);
+  display:flex;align-items:flex-end;padding:8px 10px}
+.prev-fname{font-family:'Space Mono',monospace;font-size:10px;color:var(--blue);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn-chg{position:absolute;top:7px;right:7px;background:rgba(0,0,0,.75);
+  border:1px solid var(--border);color:var(--text);font-family:inherit;
+  font-size:10px;padding:3px 8px;border-radius:6px;cursor:pointer;transition:all .2s}
+.btn-chg:hover{border-color:var(--blue);color:var(--blue)}
+
+/* Section label */
+.slabel{
+  font-family:'Space Mono',monospace;font-size:9px;letter-spacing:2.5px;
+  color:var(--blue);text-transform:uppercase;margin-bottom:8px;opacity:.65;
+  display:flex;align-items:center;gap:6px;
+}
+.slabel::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* AI Card */
+#ai-card{
+  display:none;background:rgba(56,189,248,.03);border:1px solid var(--border);
+  border-radius:10px;padding:12px;margin-bottom:14px;
+}
+.ai-spin{
+  display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text)
+}
+.spinner{width:18px;height:18px;border:2px solid var(--border);
+  border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+#ai-out{display:none}
+.ai-type{font-size:12px;font-weight:700;color:var(--texthi);margin-bottom:6px;
+  font-family:'Rajdhani',sans-serif;letter-spacing:.5px}
+.ai-subj{font-size:13px;color:var(--text);margin-bottom:8px;line-height:1.5}
+.ai-clrs{display:flex;gap:5px;margin-bottom:8px}
+.cswatch{width:26px;height:26px;border-radius:6px;border:2px solid rgba(255,255,255,.08);flex-shrink:0}
+.ai-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+.tag{font-size:10px;padding:2px 7px;border-radius:20px;border:1px solid var(--border);color:var(--text)}
+.tag.p{border-color:var(--blue);color:var(--blue)}
+.tag.s{border-color:var(--violet);color:var(--violet)}
+.tag.a{border-color:var(--amber);color:var(--amber)}
+.tag.g{border-color:var(--green);color:var(--green)}
+.ai-note{font-size:11px;color:var(--text);line-height:1.6;padding:7px 10px;
+  background:rgba(167,139,250,.05);border-radius:6px;border-right:2px solid var(--violet)}
+
+/* Mode grid */
+#mode-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-bottom:14px}
+.mcard{
+  background:rgba(255,255,255,.02);border:1px solid var(--border);
+  border-radius:10px;padding:10px 8px;cursor:pointer;transition:all .25s;text-align:center;
+}
+.mcard:hover{border-color:rgba(56,189,248,.3);background:rgba(56,189,248,.04)}
+.mcard.active{border-color:var(--blue);background:rgba(56,189,248,.08);box-shadow:0 0 18px rgba(56,189,248,.12)}
+.micon{font-size:20px;display:block;margin-bottom:4px}
+.mname{font-size:11px;font-weight:700;color:var(--texthi);font-family:'Rajdhani',sans-serif}
+.mdesc{font-size:10px;color:var(--dim);margin-top:1px}
+
+/* Settings */
+.sgroup{
+  background:rgba(255,255,255,.015);border:1px solid var(--border);
+  border-radius:10px;padding:11px;margin-bottom:14px;
+}
+.srow{margin-bottom:10px}.srow:last-child{margin-bottom:0}
+.srow-lbl{display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:5px;font-size:11px;color:var(--text)}
+.sval{color:var(--blue);font-family:'Space Mono',monospace;font-size:10px}
+input[type="range"]{width:100%;-webkit-appearance:none;height:3px;
+  background:rgba(255,255,255,.08);border-radius:2px;outline:none}
+input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+  border-radius:50%;background:var(--blue);cursor:pointer;box-shadow:0 0 8px var(--blue)}
+
+/* Progress */
+#prog-card{display:none;margin-bottom:14px}
+.pstep{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:11px;color:var(--text)}
+.pdot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex-shrink:0;transition:all .3s}
+.pdot.act{background:var(--blue);box-shadow:0 0 8px var(--blue)}
+.pdot.done{background:var(--green)}
+
+/* Buttons */
+.btn-gen{
+  width:100%;padding:13px;margin-bottom:9px;
+  background:linear-gradient(135deg,var(--blue) 0%,var(--violet) 100%);
+  color:#fff;border:none;border-radius:10px;font-family:inherit;
+  font-size:14px;font-weight:700;cursor:pointer;transition:all .3s;
+  position:relative;overflow:hidden;letter-spacing:.3px;
+}
+.btn-gen::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.15),transparent);
+}
+.btn-gen:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 28px rgba(56,189,248,.4)}
+.btn-gen:disabled{opacity:.4;cursor:not-allowed}
+.brow{display:flex;gap:7px;margin-bottom:14px}
+.btn-sm{
+  flex:1;padding:9px;background:transparent;border:1px solid var(--border);
+  color:var(--text);border-radius:8px;font-family:inherit;font-size:11px;cursor:pointer;transition:all .2s;
+}
+.btn-sm:hover:not(:disabled){border-color:var(--blue);color:var(--blue)}
+.btn-sm:disabled{opacity:.3;cursor:not-allowed}
+
+/* Stats */
+#stats-card{
+  display:none;background:rgba(52,211,153,.04);border:1px solid rgba(52,211,153,.15);
+  border-radius:10px;padding:11px;margin-bottom:14px;
+}
+.sgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.sitem{text-align:center}
+.sv{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:var(--green);display:block}
+.sl{font-size:9px;color:var(--dim);margin-top:1px}
+
+/* HUD */
+#hud{
+  position:fixed;bottom:20px;right:20px;z-index:5;
+  font-family:'Space Mono',monospace;font-size:10px;color:rgba(56,189,248,.4);
+  text-align:right;line-height:1.8;
+}
+#rot-btn{
+  position:fixed;bottom:20px;left:350px;z-index:5;
+  background:rgba(4,14,32,.9);border:1px solid var(--border);border-radius:20px;
+  padding:5px 13px;font-size:11px;color:var(--text);cursor:pointer;transition:all .2s;
+  font-family:inherit;
+}
+#rot-btn.on{border-color:var(--blue);color:var(--blue)}
+#rot-btn:hover{border-color:var(--blue)}
+
+/* Animations */
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.fade{animation:fadeUp .4s ease forwards}
+@keyframes pulse2{0%,100%{opacity:.6}50%{opacity:1}}
+.puls{animation:pulse2 1.8s ease-in-out infinite}
+
+@media(max-width:500px){
+  #panel{width:100%;height:55vh;top:auto;bottom:0;border-right:none;border-top:1px solid var(--border)}
+  #rot-btn{left:10px;bottom:calc(55vh + 10px)}
+  #hud{bottom:calc(55vh + 10px)}
+}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+
+<div id="panel">
+  <div class="panel-header">
+    <div class="logo">
+      <div class="logo-icon">🤖</div>
+      <div>
+        <div class="logo-title">AI 3D GENERATOR</div>
+        <div class="logo-sub">PHOTO → MODEL ENGINE v2</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel-body" dir="rtl">
+
+    <div id="upload-zone">
+      <input type="file" id="finput" accept="image/*">
+      <span class="up-icon">📷</span>
+      <div class="up-title">ارفع صورة للتحليل والتحويل</div>
+      <div class="up-sub">اسحب وأفلت أو اضغط للاختيار • PNG JPG WEBP</div>
+    </div>
+
+    <div id="img-prev">
+      <img id="pimg" src="" alt="">
+      <div class="prev-overlay"><span class="prev-fname" id="pfname"></span></div>
+      <button class="btn-chg" id="chgbtn">تغيير</button>
+    </div>
+
+    <div id="ai-card">
+      <div class="slabel">🧠 تحليل ذكاء اصطناعي</div>
+      <div class="ai-spin" id="ai-spin">
+        <div class="spinner"></div>
+        <span>يحلل الذكاء الاصطناعي محتوى الصورة...</span>
+      </div>
+      <div id="ai-out">
+        <div class="ai-type" id="ai-type"></div>
+        <div class="ai-subj" id="ai-subj"></div>
+        <div class="ai-clrs" id="ai-clrs"></div>
+        <div class="ai-tags" id="ai-tags"></div>
+        <div class="ai-note" id="ai-note"></div>
+      </div>
+    </div>
+
+    <div class="slabel">أسلوب التوليد</div>
+    <div id="mode-grid">
+      <div class="mcard active" data-mode="heightmap">
+        <span class="micon">🏔</span>
+        <div class="mname">Height Map</div>
+        <div class="mdesc">خريطة ارتفاع</div>
+      </div>
+      <div class="mcard" data-mode="pointcloud">
+        <span class="micon">✨</span>
+        <div class="mname">Point Cloud</div>
+        <div class="mdesc">سحابة نقطية</div>
+      </div>
+      <div class="mcard" data-mode="voxel">
+        <span class="micon">🎮</span>
+        <div class="mname">Voxel Art</div>
+        <div class="mdesc">فن المكعبات</div>
+      </div>
+      <div class="mcard" data-mode="wireframe">
+        <span class="micon">📐</span>
+        <div class="mname">Wireframe</div>
+        <div class="mdesc">شبكة سلكية</div>
+      </div>
+    </div>
+
+    <div class="slabel">إعدادات التوليد</div>
+    <div class="sgroup">
+      <div class="srow">
+        <div class="srow-lbl"><span>الدقة</span><span class="sval" id="sv-res">128</span></div>
+        <input type="range" id="sl-res" min="32" max="256" step="16" value="128">
+      </div>
+      <div class="srow">
+        <div class="srow-lbl"><span>عمق التأثير</span><span class="sval" id="sv-dep">20</span></div>
+        <input type="range" id="sl-dep" min="2" max="60" step="1" value="20">
+      </div>
+      <div class="srow">
+        <div class="srow-lbl"><span>حجم النقاط</span><span class="sval" id="sv-pt">0.4</span></div>
+        <input type="range" id="sl-pt" min="1" max="30" step="1" value="4">
+      </div>
+    </div>
+
+    <div id="prog-card">
+      <div class="slabel puls">⚡ جاري التوليد</div>
+      <div class="pstep"><div class="pdot" id="pd1"></div><span id="pt1">تحليل بيانات الصورة...</span></div>
+      <div class="pstep"><div class="pdot" id="pd2"></div><span id="pt2">بناء الهندسة ثلاثية الأبعاد...</span></div>
+      <div class="pstep"><div class="pdot" id="pd3"></div><span id="pt3">تطبيق المواد والألوان...</span></div>
+      <div class="pstep"><div class="pdot" id="pd4"></div><span id="pt4">تحسين الإضاءة والظلال...</span></div>
+    </div>
+
+    <button class="btn-gen" id="genbtn" disabled>⚡ توليد النموذج ثلاثي الأبعاد</button>
+
+    <div class="brow">
+      <button class="btn-sm" id="ssbtn" disabled>📸 لقطة</button>
+      <button class="btn-sm" id="expbtn" disabled>💾 تصدير JS</button>
+      <button class="btn-sm" id="rstbtn">🔄 مسح</button>
+    </div>
+
+    <div id="stats-card">
+      <div class="slabel">إحصائيات النموذج</div>
+      <div class="sgrid">
+        <div class="sitem"><span class="sv" id="st-v">0</span><span class="sl">رأس</span></div>
+        <div class="sitem"><span class="sv" id="st-t">0ms</span><span class="sl">وقت</span></div>
+        <div class="sitem"><span class="sv" id="st-m">—</span><span class="sl">الوضع</span></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="hud">
+  <div id="fps-hud">FPS: --</div>
+  <div>سحب: دوران | عجلة: تكبير</div>
+</div>
+
+<button id="rot-btn" class="on">⟳ تدوير تلقائي</button>
+
+<script>
+// ==================== THREE.JS SCENE ====================
+const canvas = document.getElementById('canvas');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x030B18);
+scene.fog = new THREE.FogExp2(0x030B18, 0.004);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 8000);
+camera.position.set(0, 90, 130);
+camera.lookAt(0,0,0);
+
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, preserveDrawingBuffer:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+
+// Lights
+const aLight = new THREE.AmbientLight(0x0d1f3c, 2);
+scene.add(aLight);
+
+const dLight = new THREE.DirectionalLight(0xffffff, 0.9);
+dLight.position.set(60,120,60);
+dLight.castShadow = true;
+dLight.shadow.mapSize.set(2048,2048);
+scene.add(dLight);
+
+const pBlue = new THREE.PointLight(0x38bdf8, 0.6, 300);
+pBlue.position.set(-60, 60, -60);
+scene.add(pBlue);
+
+const pViolet = new THREE.PointLight(0xa78bfa, 0.35, 200);
+pViolet.position.set(60, -40, -100);
+scene.add(pViolet);
+
+// Grid
+const grid = new THREE.GridHelper(300, 50, 0x38bdf8, 0x38bdf8);
+grid.material.opacity = 0.06;
+grid.material.transparent = true;
+grid.position.y = -25;
+scene.add(grid);
+
+// Ambient particles
+(function(){
+  const geo = new THREE.BufferGeometry();
+  const pos = new Float32Array(800*3);
+  for(let i=0;i<800*3;i++) pos[i]=(Math.random()-.5)*600;
+  geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+  scene.add(new THREE.Points(geo, new THREE.PointsMaterial({
+    color:0x38bdf8, size:.25, transparent:true, opacity:.25
+  })));
+})();
+
+// ==================== ORBIT CONTROLS ====================
+class OrbitCtrl {
+  constructor(cam, el) {
+    this.cam = cam;
+    this.el = el;
+    this.target = new THREE.Vector3();
+    this.theta = .4; this.phi = 1.1; this.r = 180;
+    this.tTheta = .4; this.tPhi = 1.1; this.tR = 180;
+    this.drag = false; this.lx = 0; this.ly = 0;
+    this.autoRot = true; this.autoSpd = .003;
+    this.damp = .07;
+
+    el.addEventListener('mousedown', e=>{this.drag=true;this.lx=e.clientX;this.ly=e.clientY;});
+    document.addEventListener('mousemove', e=>{
+      if(!this.drag) return;
+      this.tTheta -= (e.clientX-this.lx)*.007;
+      this.tPhi = Math.max(.08,Math.min(Math.PI-.08,this.tPhi-(e.clientY-this.ly)*.007));
+      this.lx=e.clientX; this.ly=e.clientY;
+    });
+    document.addEventListener('mouseup',()=>{this.drag=false});
+    el.addEventListener('wheel', e=>{
+      this.tR *= e.deltaY>0?1.08:.93;
+      this.tR = Math.max(8,Math.min(700,this.tR));
+    },{passive:true});
+    let ld=0;
+    el.addEventListener('touchstart', e=>{
+      if(e.touches.length===1){this.drag=true;this.lx=e.touches[0].clientX;this.ly=e.touches[0].clientY;}
+      else if(e.touches.length===2) ld=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    },{passive:true});
+    el.addEventListener('touchmove', e=>{
+      e.preventDefault();
+      if(e.touches.length===1&&this.drag){
+        this.tTheta-=(e.touches[0].clientX-this.lx)*.007;
+        this.tPhi=Math.max(.08,Math.min(Math.PI-.08,this.tPhi-(e.touches[0].clientY-this.ly)*.007));
+        this.lx=e.touches[0].clientX;this.ly=e.touches[0].clientY;
+      } else if(e.touches.length===2){
+        const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+        this.tR/=d/ld; this.tR=Math.max(8,Math.min(700,this.tR)); ld=d;
+      }
+    },{passive:false});
+    el.addEventListener('touchend',()=>{this.drag=false});
+  }
+  reset(r){this.r=r;this.tR=r;this.theta=.4;this.tTheta=.4;this.phi=1.1;this.tPhi=1.1;}
+  update(){
+    if(this.autoRot&&!this.drag) this.tTheta+=this.autoSpd;
+    this.theta+=(this.tTheta-this.theta)*this.damp;
+    this.phi+=(this.tPhi-this.phi)*this.damp;
+    this.r+=(this.tR-this.r)*this.damp;
+    const sp=Math.sin(this.phi),cp=Math.cos(this.phi),st=Math.sin(this.theta),ct=Math.cos(this.theta);
+    this.cam.position.set(this.target.x+this.r*sp*st,this.target.y+this.r*cp,this.target.z+this.r*sp*ct);
+    this.cam.lookAt(this.target);
+  }
+}
+const ctrl = new OrbitCtrl(camera, canvas);
+
+// ==================== APP STATE ====================
+let curMesh=null, curMode='heightmap', isGen=false;
+let uploadedFile=null, uploadedImg=null, aiData=null;
+
+// ==================== UPLOAD ====================
+const finput=document.getElementById('finput');
+const uzone=document.getElementById('upload-zone');
+const iprev=document.getElementById('img-prev');
+const pimg=document.getElementById('pimg');
+
+finput.addEventListener('change', e=>{ if(e.target.files[0]) loadFile(e.target.files[0]); });
+uzone.addEventListener('dragover', e=>{ e.preventDefault(); uzone.classList.add('over'); });
+uzone.addEventListener('dragleave', ()=>uzone.classList.remove('over'));
+uzone.addEventListener('drop', e=>{ e.preventDefault(); uzone.classList.remove('over'); if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+document.getElementById('chgbtn').addEventListener('click',()=>finput.click());
+
+async function loadFile(file) {
+  if(!file.type.startsWith('image/')) return;
+  uploadedFile = file;
+  const url = URL.createObjectURL(file);
+  pimg.src = url;
+  document.getElementById('pfname').textContent = file.name;
+  uzone.style.display = 'none';
+  iprev.style.display = 'block';
+  iprev.classList.add('fade');
+
+  uploadedImg = new Image();
+  uploadedImg.onload = () => { document.getElementById('genbtn').disabled = false; };
+  uploadedImg.src = url;
+
+  runAI(file);
+}
+
+// ==================== AI ANALYSIS ====================
+const aiCard=document.getElementById('ai-card');
+const aiSpin=document.getElementById('ai-spin');
+const aiOut=document.getElementById('ai-out');
+
+async function runAI(file) {
+  aiCard.style.display='block';
+  aiCard.classList.add('fade');
+  aiSpin.style.display='flex';
+  aiOut.style.display='none';
+  try {
+    const b64 = await toB64(file);
+    const mt = file.type||'image/jpeg';
+    const res = await fetch("https://api.anthropic.com/v1/messages",{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:800,
+        messages:[{role:'user',content:[
+          {type:'image',source:{type:'base64',media_type:mt,data:b64}},
+          {type:'text',text:`Analyze this image for 3D model generation. Return ONLY valid JSON, no markdown:
+{"scene_type":"portrait|landscape|product|architecture|abstract","main_subject":"وصف قصير بالعربية","dominant_colors":["#hex1","#hex2","#hex3","#hex4"],"recommended_style":"heightmap|voxel|pointcloud|wireframe","mood":"serene|dramatic|energetic|mysterious|warm|cool","texture":"smooth|rough|detailed|flat","ai_notes":"نصيحة توليد قصيرة بالعربية","complexity":0.7}`}
+        ]}]
+      })
+    });
+    const d = await res.json();
+    const txt = d.content.filter(b=>b.type==='text').map(b=>b.text).join('');
+    const m = txt.match(/\{[\s\S]*\}/);
+    if(!m) throw 0;
+    aiData = JSON.parse(m[0]);
+    showAI(aiData);
+    if(aiData.recommended_style) setMode(aiData.recommended_style);
+  } catch(e) {
+    aiSpin.innerHTML='<span style="color:var(--amber)">⚠️ تعذّر التحليل. يمكنك المتابعة يدوياً.</span>';
+  }
+}
+
+function toB64(file){ return new Promise((ok,fail)=>{
+  const r=new FileReader();
+  r.onload=()=>ok(r.result.split(',')[1]);
+  r.onerror=fail; r.readAsDataURL(file);
+}); }
+
+const MOODS={serene:'🌊',dramatic:'⚡',energetic:'🔥',mysterious:'🌑',warm:'☀️',cool:'❄️'};
+const ICONS={portrait:'👤',landscape:'🏞',product:'📦',architecture:'🏛',abstract:'🎨',other:'🖼'};
+
+function showAI(a) {
+  aiSpin.style.display='none';
+  aiOut.style.display='block';
+  aiOut.classList.add('fade');
+  document.getElementById('ai-type').innerHTML=`${ICONS[a.scene_type]||'🖼'} ${(a.scene_type||'IMAGE').toUpperCase()}`;
+  document.getElementById('ai-subj').textContent = a.main_subject||'';
+  const clrEl=document.getElementById('ai-clrs');
+  clrEl.innerHTML='';
+  (a.dominant_colors||[]).slice(0,5).forEach(c=>{
+    const sw=document.createElement('div');
+    sw.className='cswatch'; sw.style.background=c; sw.title=c; clrEl.appendChild(sw);
+  });
+  const tagEl=document.getElementById('ai-tags');
+  tagEl.innerHTML='';
+  const tags=[
+    {t:`${MOODS[a.mood]||''} ${a.mood||''}`,c:'p'},
+    {t:a.texture,c:'s'},
+    {t:a.recommended_style,c:'a'},
+    {t:`${Math.round((a.complexity||.5)*100)}% تعقيد`,c:'g'}
+  ].filter(x=>x.t&&x.t.trim());
+  tags.forEach(({t,c})=>{
+    const el=document.createElement('span');
+    el.className=`tag ${c}`; el.textContent=t.trim(); tagEl.appendChild(el);
+  });
+  document.getElementById('ai-note').textContent = a.ai_notes||'';
+}
+
+// ==================== MODES ====================
+document.querySelectorAll('.mcard').forEach(c=>{
+  c.addEventListener('click',()=>setMode(c.dataset.mode));
+});
+function setMode(m){
+  curMode=m;
+  document.querySelectorAll('.mcard').forEach(c=>c.classList.toggle('active',c.dataset.mode===m));
+}
+
+// ==================== SLIDERS ====================
+const slRes=document.getElementById('sl-res');
+const slDep=document.getElementById('sl-dep');
+const slPt=document.getElementById('sl-pt');
+slRes.addEventListener('input',()=>document.getElementById('sv-res').textContent=slRes.value);
+slDep.addEventListener('input',()=>document.getElementById('sv-dep').textContent=slDep.value);
+slPt.addEventListener('input',()=>document.getElementById('sv-pt').textContent=(slPt.value/10).toFixed(1));
+
+// ==================== GENERATE ====================
+document.getElementById('genbtn').addEventListener('click', generate);
+
+async function generate() {
+  if(isGen||!uploadedImg) return;
+  isGen=true;
+  const btn=document.getElementById('genbtn');
+  btn.disabled=true; btn.textContent='⏳ جاري التوليد...';
+  const pc=document.getElementById('prog-card');
+  pc.style.display='block'; pc.classList.add('fade');
+  [1,2,3,4].forEach(i=>{ document.getElementById(`pd${i}`).className='pdot'; });
+  const t0=performance.now();
+  try {
+    await step(1,80);
+    const {data,w,h}=getPixels();
+    const depth=+slDep.value;
+    const ptSize=slPt.value/10;
+    await step(2,150);
+    if(curMesh){ scene.remove(curMesh); dispMesh(curMesh); curMesh=null; }
+    await step(3,100);
+    let mesh;
+    switch(curMode){
+      case 'heightmap': mesh=mkHeightMap(data,w,h,depth); break;
+      case 'pointcloud': mesh=mkPointCloud(data,w,h,depth,ptSize); break;
+      case 'voxel': mesh=mkVoxel(data,w,h,depth); break;
+      case 'wireframe': mesh=mkWireframe(data,w,h,depth); break;
+    }
+    await step(4,80);
+    curMesh=mesh; scene.add(curMesh);
+
+    // Center model
+    const box=new THREE.Box3().setFromObject(curMesh);
+    const ctr=box.getCenter(new THREE.Vector3());
+    const sz=box.getSize(new THREE.Vector3()).length();
+    curMesh.position.sub(ctr);
+    ctrl.reset(sz*1.3);
+
+    const verts=getVC(mesh);
+    const elapsed=Math.round(performance.now()-t0);
+    document.getElementById('st-v').textContent=verts.toLocaleString();
+    document.getElementById('st-t').textContent=elapsed+'ms';
+    document.getElementById('st-m').textContent=curMode;
+    document.getElementById('stats-card').style.display='block';
+    document.getElementById('stats-card').classList.add('fade');
+    document.getElementById('ssbtn').disabled=false;
+    document.getElementById('expbtn').disabled=false;
+  } catch(e){ console.error(e); }
+  pc.style.display='none';
+  btn.disabled=false; btn.textContent='⚡ إعادة التوليد';
+  isGen=false;
+}
+
+function step(n,ms){
+  return new Promise(ok=>{
+    if(n>1) document.getElementById(`pd${n-1}`).className='pdot done';
+    document.getElementById(`pd${n}`).className='pdot act';
+    setTimeout(ok,ms);
+  });
+}
+
+function getPixels(){
+  const res=+slRes.value;
+  const iw=uploadedImg.naturalWidth, ih=uploadedImg.naturalHeight;
+  let w,h;
+  if(iw>=ih){w=res;h=Math.max(1,Math.round(res*ih/iw));}
+  else{h=res;w=Math.max(1,Math.round(res*iw/ih));}
+  const c=document.createElement('canvas');
+  c.width=w; c.height=h;
+  const ctx=c.getContext('2d');
+  ctx.drawImage(uploadedImg,0,0,w,h);
+  return {data:ctx.getImageData(0,0,w,h).data, w, h};
+}
+
+function lum(r,g,b){ return (.299*r+.587*g+.114*b)/255; }
+
+// HEIGHT MAP
+function mkHeightMap(data,w,h,depth){
+  const geo=new THREE.PlaneGeometry(w*.5,h*.5,w-1,h-1);
+  const pos=geo.attributes.position.array;
+  const col=new Float32Array(pos.length);
+  for(let i=0;i<w*h;i++){
+    const pi=i*4;
+    const r=data[pi]/255,g=data[pi+1]/255,b=data[pi+2]/255;
+    pos[i*3+2]=lum(data[pi],data[pi+1],data[pi+2])*depth;
+    col[i*3]=r; col[i*3+1]=g; col[i*3+2]=b;
+  }
+  geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+  geo.rotateX(-Math.PI/2);
+  geo.computeVertexNormals();
+  const mat=new THREE.MeshPhongMaterial({vertexColors:true,side:THREE.DoubleSide,shininess:40,specular:new THREE.Color(.1,.1,.1)});
+  const m=new THREE.Mesh(geo,mat);
+  m.castShadow=true; m.receiveShadow=true;
+  return m;
+}
+
+// WIREFRAME
+function mkWireframe(data,w,h,depth){
+  const lim=Math.min(w,100);
+  const sc=lim/w;
+  const ww=Math.round(w*sc), hh=Math.round(h*sc);
+  const c2=document.createElement('canvas'); c2.width=ww; c2.height=hh;
+  const x=c2.getContext('2d');
+  x.drawImage(uploadedImg,0,0,ww,hh);
+  const d2=x.getImageData(0,0,ww,hh).data;
+  const geo=new THREE.PlaneGeometry(ww*.5,hh*.5,ww-1,hh-1);
+  const pos=geo.attributes.position.array;
+  for(let i=0;i<ww*hh;i++){
+    const pi=i*4;
+    pos[i*3+2]=lum(d2[pi],d2[pi+1],d2[pi+2])*depth;
+  }
+  geo.rotateX(-Math.PI/2);
+  geo.computeVertexNormals();
+  const g=new THREE.Group();
+  const solid=new THREE.Mesh(geo.clone(), new THREE.MeshPhongMaterial({color:0x030B18,side:THREE.DoubleSide}));
+  const wire=new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color:0x38bdf8,wireframe:true,transparent:true,opacity:.75}));
+  g.add(solid,wire);
+  return g;
+}
+
+// POINT CLOUD
+function mkPointCloud(data,w,h,depth,ptSize){
+  const step=Math.max(1,Math.floor(Math.min(w,h)/90));
+  const pos=[],col=[];
+  for(let j=0;j<h;j+=step){
+    for(let i=0;i<w;i+=step){
+      const pi=(j*w+i)*4;
+      if(data[pi+3]<20) continue;
+      const r=data[pi]/255,g=data[pi+1]/255,b=data[pi+2]/255;
+      const L=lum(data[pi],data[pi+1],data[pi+2]);
+      pos.push((i-w/2)*.5, L*depth, (j-h/2)*.5);
+      col.push(r,g,b);
+    }
+  }
+  const geo=new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(pos,3));
+  geo.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+  return new THREE.Points(geo,new THREE.PointsMaterial({size:ptSize,vertexColors:true,sizeAttenuation:true,transparent:true,opacity:.92}));
+}
+
+// VOXEL
+function mkVoxel(data,w,h,depth){
+  const step=Math.max(2,Math.floor(Math.min(w,h)/52));
+  const vs=.45*step*.5;
+  const inst=[];
+  for(let j=0;j<h;j+=step)
+    for(let i=0;i<w;i+=step){
+      const pi=(j*w+i)*4;
+      inst.push({x:(i-w/2)*.5,z:(j-h/2)*.5,
+        y:lum(data[pi],data[pi+1],data[pi+2])*depth,
+        r:data[pi]/255,g:data[pi+1]/255,b:data[pi+2]/255});
+    }
+  const geo=new THREE.BoxGeometry(vs,vs,vs);
+  const mat=new THREE.MeshPhongMaterial();
+  const im=new THREE.InstancedMesh(geo,mat,inst.length);
+  const dummy=new THREE.Object3D();
+  const color=new THREE.Color();
+  inst.forEach((v,i)=>{
+    dummy.position.set(v.x,v.y,v.z);
+    dummy.updateMatrix();
+    im.setMatrixAt(i,dummy.matrix);
+    color.setRGB(v.r,v.g,v.b);
+    im.setColorAt(i,color);
+  });
+  im.instanceMatrix.needsUpdate=true;
+  if(im.instanceColor) im.instanceColor.needsUpdate=true;
+  im.castShadow=true;
+  return im;
+}
+
+function getVC(m){
+  if(m instanceof THREE.InstancedMesh) return m.count;
+  if(m.geometry) return m.geometry.attributes.position?.count||0;
+  if(m.children) return m.children.reduce((s,c)=>s+(c.geometry?.attributes.position?.count||0),0);
+  return 0;
+}
+
+function dispMesh(m){
+  if(!m) return;
+  if(m.geometry) m.geometry.dispose();
+  if(m.material){Array.isArray(m.material)?m.material.forEach(x=>x.dispose()):m.material.dispose();}
+  if(m.children) m.children.forEach(dispMesh);
+}
+
+// ==================== EXPORT ====================
+document.getElementById('ssbtn').addEventListener('click',()=>{
+  renderer.render(scene,camera);
+  const a=document.createElement('a');
+  a.download='ai-3d-model.png';
+  a.href=renderer.domElement.toDataURL('image/png');
+  a.click();
+});
+
+document.getElementById('expbtn').addEventListener('click',()=>{
+  const code=`// AI 3D Generator — Three.js Export
+// Mode: ${curMode} | Res: ${slRes.value} | Depth: ${slDep.value}
+// Generated: ${new Date().toLocaleString()}
+
+import * as THREE from 'three';
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x030B18);
+scene.fog = new THREE.FogExp2(0x030B18, 0.004);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 8000);
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+// Lights
+scene.add(new THREE.AmbientLight(0x0d1f3c, 2));
+const dLight = new THREE.DirectionalLight(0xffffff, 0.9);
+dLight.position.set(60,120,60);
+dLight.castShadow = true;
+scene.add(dLight);
+scene.add(Object.assign(new THREE.PointLight(0x38bdf8,.6,300),{position:{x:-60,y:60,z:-60}}));
+
+// Grid
+const grid = new THREE.GridHelper(300,50,0x38bdf8,0x38bdf8);
+grid.material.opacity=.06; grid.material.transparent=true;
+grid.position.y=-25; scene.add(grid);
+
+// TODO: Add your image pixel data here and call the ${curMode} generation function
+// Use canvas to get imageData, then apply the algorithm
+
+function animate() {
+  requestAnimationFrame(animate);
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+animate();
+`;
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([code],{type:'text/javascript'}));
+  a.download='ai-3d-model.js'; a.click();
+});
+
+document.getElementById('rstbtn').addEventListener('click',()=>{
+  if(curMesh){scene.remove(curMesh);dispMesh(curMesh);curMesh=null;}
+  document.getElementById('stats-card').style.display='none';
+  document.getElementById('ssbtn').disabled=true;
+  document.getElementById('expbtn').disabled=true;
+  document.getElementById('genbtn').textContent='⚡ توليد النموذج ثلاثي الأبعاد';
+  if(uploadedImg){document.getElementById('genbtn').disabled=false;}
+});
+
+// ==================== ROTATE TOGGLE ====================
+const rotBtn=document.getElementById('rot-btn');
+rotBtn.addEventListener('click',()=>{
+  ctrl.autoRot=!ctrl.autoRot;
+  rotBtn.classList.toggle('on',ctrl.autoRot);
+  rotBtn.textContent=ctrl.autoRot?'⟳ تدوير تلقائي':'◼ إيقاف التدوير';
+});
+
+// ==================== ANIMATE LOOP ====================
+let frames=0, lastFPS=performance.now();
+function animate(){
+  requestAnimationFrame(animate);
+  ctrl.update();
+  // Gentle light animation
+  const t=performance.now()*.001;
+  pBlue.position.x=Math.cos(t*.4)*80;
+  pBlue.position.z=Math.sin(t*.4)*80;
+  renderer.render(scene,camera);
+  frames++;
+  const now=performance.now();
+  if(now-lastFPS>1000){
+    document.getElementById('fps-hud').textContent=`FPS: ${frames}`;
+    frames=0; lastFPS=now;
+  }
+}
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+animate();
+</script>
+</body>
+</html>
